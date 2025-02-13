@@ -46,48 +46,48 @@ def load_data(file_buffer, file_type=None):
 
 def preprocess_data(data_dict):
     """
-    Preprocess the data from the Excel file.
-    
-    Expected keys in data_dict:
-        - 'Stock Prices'
-        - 'FX'
-        - 'Weights'
-        - 'Currency'
-    
-    This function checks for the existence of the required sheets and logs warnings
-    if any critical data is missing.
-    
-    Parameters:
-        data_dict (dict): Dictionary of DataFrames from load_data.
-    
+    Load and preprocess the data from a single-sheet Excel file containing Stock Prices, FX, Weights, and Currency.
+
+    Expected format:
+      - Stock Price: "Date" + Indices (e.g., ABC, DEF, GHI, etc.)
+      - FX: Conversion rates for that date (but no date included in the table row) (e.g., EURUSD, GBPUSD)
+      - Weights: "Date" + Indices (same as Stock Prices)
+      - Currency: Two columns without a header row - Index and Currency
+
     Returns:
-        Tuple of DataFrames: (df_stock, df_fx, df_weights, df_currency)
-    
+        A dictionary containing the preprocessed tables.
+
     Raises:
-        ValueError: if a required sheet is missing.
+        ValueError: if the file does not contain enough tables for processing.
     """
-    required_sheets = ['Stock Prices', 'FX', 'Weights', 'Currency']
-    for sheet in required_sheets:
-        if sheet not in data_dict:
-            error_msg = f"Missing required sheet: {sheet}"
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-    
-    # Extract individual DataFrames
-    df_stock = data_dict['Stock Prices']
-    df_fx = data_dict['FX']
-    df_weights = data_dict['Weights']
-    df_currency = data_dict['Currency']
+    # first extract the sheet "Stock Data" which contains all the tables
+    if "Stock Data" not in data_dict:
+        raise ValueError("Sheet 'Stock Data' not found in the file.")
 
-    # Basic validation: log warnings if missing values are detected
-    if df_stock.isnull().values.any():
-        logging.warning("Missing values found in Stock Prices data.")
-    if df_fx.isnull().values.any():
-        logging.warning("Missing values found in FX data.")
-    if df_weights.isnull().values.any():
-        logging.warning("Missing values found in Weights data.")
-    if df_currency.isnull().values.any():
-        logging.warning("Missing values found in Currency data.")
+    stock_data = data_dict["Stock Data"]
 
-    logging.info("Data preprocessing complete.")
-    return df_stock, df_fx, df_weights, df_currency
+    # remove the column names 
+    stock_data.columns = range(stock_data.shape[1])
+
+    # each table is separated by a column of NaN values
+    nan_cols = stock_data.isnull().all()
+    table_indices = [-1]
+    table_indices.extend(stock_data.columns[nan_cols].tolist())
+    table_indices = table_indices[:5]
+
+    # extract the tables
+    tables = []
+    for i in range(0, len(table_indices) - 1):
+        tables.append(stock_data.iloc[:, table_indices[i]+1:table_indices[i + 1]])
+        # remove rows with all NaN values
+        tables[i] = tables[i].dropna(how="all")
+
+    # add a date column to the second table with the values from the first table
+    tables[1].insert(0, "Date", tables[0].iloc[:, 0])
+
+    # check if there are enough tables for processing
+    if len(tables) < 4:
+        raise ValueError("Not enough tables found in the file.")
+
+    return tables
+
