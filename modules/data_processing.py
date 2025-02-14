@@ -46,6 +46,34 @@ def load_data(file_buffer, file_type=None):
         logger.error("Error loading data: %s", e)
         raise e
 
+
+def detect_extreme_movements(df, column_names, threshold=5):
+    """
+    Detects if a column has extreme percentage movements between consecutive rows.
+    
+    Args:
+    - df: DataFrame with a "Date" column and price columns.
+    - column_names: List of stock price columns to check.
+    - threshold: Multiplier for detecting extreme changes (default: 5x).
+    
+    Returns:
+    - DataFrame of extreme movement rows.
+    """
+    df_sorted = df.sort_values(by="Date").copy()
+    for col in column_names:
+        df_sorted[f"{col}_pct_change"] = df_sorted[col].pct_change().abs()
+    
+    extreme_movements = df_sorted[
+        (df_sorted.filter(like="_pct_change") > threshold).any(axis=1)
+    ]
+    
+    if not extreme_movements.empty:
+        print(f"Warning: Extreme movements detected in {column_names}.")
+        print(extreme_movements)
+    
+    return extreme_movements
+
+
 def preprocess_data(data_dict):
     """
     Load and preprocess the data from a single-sheet Excel file containing Stock Prices, FX, Weights, and Currency.
@@ -102,6 +130,12 @@ def preprocess_data(data_dict):
         raise ValueError("Not enough tables found in the file.")
 
     logger.info("Data preprocessed successfully.")
+    
+    df_stock = tables[0]
+    extreme_jumps = detect_extreme_movements(df_stock, df_stock.columns[1:])
+    if not extreme_jumps.empty:
+        print("⚠ Extreme price movements detected! Review the following rows:")
+        print(extreme_jumps)
 
     return {
         'stock_prices': tables[0],
@@ -109,5 +143,3 @@ def preprocess_data(data_dict):
         'weights': tables[2],
         'currency': tables[3]
     }
-
-

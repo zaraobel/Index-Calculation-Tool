@@ -61,6 +61,9 @@ class IndexCalculator:
         if day <= self.FIRST_REBALANCE_DAY:
             logger.debug(f"Day {day} is before the first rebalance day")
             return 100  # Base index level
+        elif day <= self.tables['stock_prices']['Date'].iloc[1]:
+            logger.debug(f"Day {day} is the first day in the table")
+            return 100
 
         prev_day = self.get_prev_day(day)
         if prev_day is None:
